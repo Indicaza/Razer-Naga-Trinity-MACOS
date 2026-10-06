@@ -1,0 +1,66 @@
+.boot-shell {
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(ellipse at 12% -5%, rgba(0, 255, 102, 0.14), transparent 45%),
+    var(--bg-0);
+}
+
+.boot-card {
+  min-width: 280px;
+  max-width: 460px;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-strong);
+  box-shadow: var(--shadow-soft);
+  text-align: center;
+}
+
+.boot-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 255, 102, 0.18);
+  border-top-color: var(--accent);
+  animation: spin 900ms linear infinite;
+}
+
+.boot-card span,
+.boot-card small {
+  color: var(--text-2);
+}
+
+.boot-card small {
+  overflow-wrap: anywhere;
+}
+
+.boot-card button {
+  margin-top: 4px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-soft);
+  cursor: pointer;
+}
+
+/* Whole-page entrance transforms looked like renderer flicker on macOS/Electron. */
+.section {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
