@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { Crosshair, Gauge, Layers, MinusCircle, PlusCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useActiveProfile, useNagaStore } from '../store/useNagaStore'
@@ -19,19 +20,45 @@ export function PerformancePanel() {
   const profile = useActiveProfile()
   const updateActive = useNagaStore((state) => state.updateActive)
   const setSidePlate = useNagaStore((state) => state.setSidePlate)
+  const device = useNagaStore((state) => state.device)
   const { dpi, pollingRate, sidePlate } = profile
+  const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const activeStage = dpi.stages[dpi.activeStage - 1] ?? dpi.stages[0]
+  const activeStageIndex = Math.max(0, Math.min(dpi.stages.length - 1, dpi.activeStage - 1))
+  const activeStage = dpi.stages[activeStageIndex] ?? dpi.stages[0]
+  const maxDpi = device.model === 'naga-pro-wired' ? 20000 : 16000
+  const mouseSpeed = activeStage?.x ?? 1800
+
+  useEffect(() => {
+    if (
+      !device.connected ||
+      device.model !== 'naga-pro-wired' ||
+      !activeStage ||
+      !window.naga?.previewDpi
+    ) {
+      return
+    }
+
+    if (previewTimer.current) clearTimeout(previewTimer.current)
+    previewTimer.current = setTimeout(() => {
+      void window.naga.previewDpi(activeStage.x, activeStage.y)
+    }, 120)
+
+    return () => {
+      if (previewTimer.current) clearTimeout(previewTimer.current)
+    }
+  }, [activeStage?.x, activeStage?.y, device.connected, device.model])
 
   const setStageValue = (stageIndex: number, axis: 'x' | 'y', value: number, link = true) => {
+    const clamped = Math.max(100, Math.min(maxDpi, value))
     updateActive((current) => ({
       ...current,
       dpi: {
         ...current.dpi,
         stages: current.dpi.stages.map((stage, index) => {
           if (index !== stageIndex) return stage
-          if (link) return { ...stage, x: value, y: value }
-          return { ...stage, [axis]: value }
+          if (link) return { ...stage, x: clamped, y: clamped }
+          return { ...stage, [axis]: clamped }
         }),
       },
     }))
@@ -87,7 +114,7 @@ export function PerformancePanel() {
 
         <div className="dpi-hero">
           <div className="dpi-value">
-            <strong>{activeStage?.x ?? 1800}</strong>
+            <strong>{mouseSpeed}</strong>
             <span>{t('performance.activeDpi')}</span>
           </div>
           <div className="dpi-meta">
@@ -95,6 +122,24 @@ export function PerformancePanel() {
             <span>Y · {activeStage?.y ?? 0}</span>
           </div>
         </div>
+
+        <div className="slider-row">
+          <label>
+            <span>{t('performance.mouseSpeed')}</span>
+            <input
+              type="range"
+              min={100}
+              max={maxDpi}
+              step={50}
+              value={mouseSpeed}
+              onChange={(event) =>
+                setStageValue(activeStageIndex, 'x', Number(event.target.value), true)
+              }
+            />
+            <output>{mouseSpeed} DPI</output>
+          </label>
+        </div>
+        <p className="muted small">{t('performance.mouseSpeedNote')}</p>
 
         <div className="stage-list">
           {dpi.stages.map((stage, index) => {
@@ -115,7 +160,7 @@ export function PerformancePanel() {
                     <input
                       type="number"
                       min={100}
-                      max={16000}
+                      max={maxDpi}
                       step={50}
                       value={stage.x}
                       onChange={(event) =>
@@ -126,7 +171,7 @@ export function PerformancePanel() {
                   <input
                     type="range"
                     min={100}
-                    max={16000}
+                    max={maxDpi}
                     step={50}
                     value={stage.x}
                     onChange={(event) =>
@@ -151,7 +196,7 @@ export function PerformancePanel() {
         <div className="preset-row">
           <span className="preset-label">{t('performance.quickSelect')}</span>
           <div className="preset-grid">
-            {DPI_PRESETS.map((dpiValue) => (
+            {DPI_PRESETS.filter((dpiValue) => dpiValue <= maxDpi).map((dpiValue) => (
               <button
                 key={dpiValue}
                 type="button"
