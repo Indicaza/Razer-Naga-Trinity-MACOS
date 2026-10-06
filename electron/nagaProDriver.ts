@@ -15,11 +15,13 @@ const SET_REPORT_VALUE = 0x0300
 const TX = 0x1f
 const DIRECT_PROFILE = 0x00
 const SIDE_BUTTON_BASE = 0x40
+const NOSTORE = 0x00
 const VARSTORE = 0x01
 const LED_SCROLL = 0x01
 const LED_LOGO = 0x04
 const WHEEL_UP_SLOT = 0x09
 const WHEEL_DOWN_SLOT = 0x0a
+const MAX_DPI = 20000
 
 const F13_TO_F24_HID: readonly number[] = [
   0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73,
@@ -303,18 +305,41 @@ const applyRgb = async (device: Device, rgb: RgbSettings) => {
   }
 }
 
+const clampDpi = (value: number) =>
+  Math.max(100, Math.min(MAX_DPI, Math.round(Number.isFinite(value) ? value : 1800)))
+
+const setDpiXY = async (
+  device: Device,
+  x: number,
+  y: number,
+  store: boolean,
+) => {
+  const dpiX = clampDpi(x)
+  const dpiY = clampDpi(y)
+  const report = createReport(0x04, 0x05, 0x07)
+  report[8] = store ? VARSTORE : NOSTORE
+  report[9] = (dpiX >> 8) & 0xff
+  report[10] = dpiX & 0xff
+  report[11] = (dpiY >> 8) & 0xff
+  report[12] = dpiY & 0xff
+  report[13] = 0x00
+  report[14] = 0x00
+  await controlSetReport(device, report)
+}
+
 const applyDpi = async (device: Device, profile: NagaProfile) => {
   const stages = profile.dpi.stages.slice(0, 5)
   if (stages.length === 0) return
 
+  const activeIndex = Math.max(0, Math.min(stages.length - 1, profile.dpi.activeStage - 1))
   const report = createReport(0x04, 0x06, 0x26)
   report[8] = VARSTORE
-  report[9] = Math.max(0, Math.min(stages.length - 1, profile.dpi.activeStage - 1))
+  report[9] = activeIndex
   report[10] = stages.length
 
   stages.forEach((stage, index) => {
-    const x = Math.max(100, Math.min(20000, Math.round(stage.x)))
-    const y = Math.max(100, Math.min(20000, Math.round(stage.y)))
+    const x = clampDpi(stage.x)
+    const y = clampDpi(stage.y)
     const base = 11 + index * 7
     report[base] = index
     report[base + 1] = (x >> 8) & 0xff
@@ -326,6 +351,9 @@ const applyDpi = async (device: Device, profile: NagaProfile) => {
   })
 
   await controlSetReport(device, report)
+  await wait(12)
+  const active = stages[activeIndex]
+  await setDpiXY(device, active.x, active.y, true)
 }
 
 const applyPolling = async (device: Device, rate: PollingRate) => {
@@ -394,6 +422,15 @@ export const applyNagaProRgbOnly = async (rgb: RgbSettings): Promise<ApplyResult
   try {
     await withNagaPro((device) => applyRgb(device, rgb))
     return { ok: true, message: 'Naga Pro RGB applied.', stage: 'rgb' }
+  } catch (error) {
+    return resultFromError(error)
+  }
+}
+
+export const applyNagaProDpiOnly = async (x: number, y = x): Promise<ApplyResult> => {
+  try {
+    await withNagaPro((device) => setDpiXY(device, x, y, false))
+    return { ok: true, message: `Naga Pro mouse speed set to ${clampDpi(x)} DPI.`, stage: 'dpi' }
   } catch (error) {
     return resultFromError(error)
   }

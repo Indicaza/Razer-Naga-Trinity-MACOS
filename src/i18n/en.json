@@ -95,6 +95,8 @@
     "dpiStagesTitle": "DPI stages",
     "addStage": "Add stage",
     "activeDpi": "Active DPI",
+    "mouseSpeed": "Mouse speed",
+    "mouseSpeedNote": "Live Naga hardware sensitivity. This changes the mouse only and leaves the Mac trackpad untouched.",
     "stageActivateAria": "Activate stage {{n}}",
     "removeStageAria": "Remove stage",
     "quickSelect": "Quick select",
