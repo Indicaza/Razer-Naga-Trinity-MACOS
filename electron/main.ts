@@ -15,6 +15,7 @@ import { findSupportedNaga, toDeviceInfo } from './nagaDevices'
 import {
   applyNagaProProfile,
   applyNagaProRgbOnly,
+  applyNagaProScrollDirection,
   setNagaProRgbOff,
 } from './nagaProDriver'
 import { registerProfileShortcuts, unregisterAllMacroShortcuts } from './macroEngine'
@@ -27,7 +28,6 @@ import {
   upsertProfile,
   writeStore,
 } from './profileStore'
-import { setMouseScrollReversed, stopMouseScrollHelper } from './scrollHelper'
 import type {
   AppSettings,
   ApplyResult,
@@ -55,7 +55,7 @@ const TRAY_STRINGS = {
     openWindow: 'Fenster öffnen',
     reapplyProfile: 'Profil neu anwenden',
     launchAtLogin: 'Bei macOS-Login starten',
-    reverseMouseScroll: 'Mausrad-Richtung umkehren',
+    reverseMouseScroll: 'Naga-Mausrad umkehren',
     autoApplyOnConnect: 'Profil beim Anschließen anwenden',
     rgbOffOnLock: 'RGB beim Sperren ausschalten',
     quit: 'Beenden',
@@ -64,7 +64,7 @@ const TRAY_STRINGS = {
     openWindow: 'Open window',
     reapplyProfile: 'Re-apply profile',
     launchAtLogin: 'Launch at macOS login',
-    reverseMouseScroll: 'Reverse mouse-wheel direction',
+    reverseMouseScroll: 'Reverse Naga mouse wheel',
     autoApplyOnConnect: 'Apply profile when Naga connects',
     rgbOffOnLock: 'Turn RGB off when screen locks',
     quit: 'Quit',
@@ -92,7 +92,7 @@ const scanNaga = () => toDeviceInfo(findSupportedNaga())
 const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> => {
   const device = scanNaga()
   if (device.connected && device.model === 'naga-pro-wired') {
-    return applyNagaProProfile(profile)
+    return applyNagaProProfile(profile, cachedReverseMouseScroll)
   }
   if (device.connected && device.writeSupport !== 'full') {
     return {
@@ -189,9 +189,17 @@ const updateRuntimeSettings = async (partial: Partial<AppSettings>) => {
   cachedReverseMouseScroll = next.settings?.reverseMouseScroll !== false
   cachedAutoApplyOnConnect = next.settings?.autoApplyOnConnect !== false
   cachedLang = detectInitialLang(next.settings?.language)
-  setMouseScrollReversed(cachedReverseMouseScroll)
   tray?.setContextMenu(buildTrayMenu())
   return next.settings ?? { rgbOffOnLock: true }
+}
+
+const updateScrollDirection = async (enabled: boolean) => {
+  await updateRuntimeSettings({ reverseMouseScroll: enabled })
+  const device = scanNaga()
+  if (device.connected && device.model === 'naga-pro-wired') {
+    const result = await applyNagaProScrollDirection(enabled)
+    console.log('[naga] scroll direction:', result.ok ? 'OK' : 'FAIL', '-', result.message)
+  }
 }
 
 const buildTrayMenu = () => {
@@ -231,7 +239,7 @@ const buildTrayMenu = () => {
       type: 'checkbox',
       checked: cachedReverseMouseScroll,
       click: (item) => {
-        void updateRuntimeSettings({ reverseMouseScroll: item.checked })
+        void updateScrollDirection(item.checked)
       },
     },
     {
@@ -373,7 +381,6 @@ app.whenReady().then(async () => {
   ensureAccessibilityPermission()
   await configureFirstRunBackground()
   await refreshSettingsCache()
-  setMouseScrollReversed(cachedReverseMouseScroll)
   registerPowerHandlers()
   registerDeviceWatcher()
   createTray()
@@ -401,6 +408,5 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   isQuitting = true
   if (deviceWatchTimer) clearInterval(deviceWatchTimer)
-  stopMouseScrollHelper()
   unregisterAllMacroShortcuts()
 })
