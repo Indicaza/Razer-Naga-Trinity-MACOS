@@ -5,6 +5,8 @@ import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../i18n'
 import { useActiveProfile, useNagaStore } from '../store/useNagaStore'
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const formatUsbId = (value: number | undefined) =>
+  value === undefined ? '----' : value.toString(16).toUpperCase().padStart(4, '0')
 
 export function Sidebar() {
   const { t, i18n } = useTranslation()
@@ -45,7 +47,7 @@ export function Sidebar() {
           <MousePointer2 size={20} />
         </div>
         <div className="brand-text">
-          <span>Naga Trinity</span>
+          <span>Razer Naga</span>
           <strong>{t('sidebar.brandSub')}</strong>
         </div>
       </div>
@@ -59,12 +61,22 @@ export function Sidebar() {
             <span className="pill-dot" />
             {device.connected ? t('common.connected') : t('common.disconnected')}
           </span>
-          <h2>{device.productName || 'Razer Naga Trinity'}</h2>
+          <h2>{device.productName || 'Razer Naga'}</h2>
           <p>
-            VID:PID <strong>1532:0067</strong>
+            VID:PID{' '}
+            <strong>
+              {formatUsbId(device.vendorId)}:{formatUsbId(device.productId)}
+            </strong>
             <span className="dot-sep">·</span>
             {device.interfaces || 0} {t('sidebar.hidInterfaces')}
           </p>
+          {device.connected && device.writeSupport === 'detect-only' && (
+            <p>
+              <strong>Detected safely</strong>
+              <span className="dot-sep">·</span>
+              hardware writes disabled pending protocol verification
+            </p>
+          )}
         </div>
         <button
           className="ghost-button compact full-width"

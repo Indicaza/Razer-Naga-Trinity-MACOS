@@ -102,8 +102,13 @@ export interface ProfileStore {
   settings?: AppSettings
 }
 
+export type NagaModel = 'naga-trinity' | 'naga-pro-wired'
+export type WriteSupport = 'full' | 'detect-only'
+
 export interface DeviceInfo {
   connected: boolean
+  model?: NagaModel
+  writeSupport?: WriteSupport
   productName?: string
   manufacturer?: string
   vendorId?: number
