@@ -94,6 +94,7 @@ export interface AppSettings {
   rgbOffOnLock: boolean
   reverseMouseScroll?: boolean
   autoApplyOnConnect?: boolean
+  browserAutoscroll?: boolean
   autoLaunchConfigured?: boolean
   language?: 'de' | 'en'
 }
