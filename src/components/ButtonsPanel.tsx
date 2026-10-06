@@ -9,6 +9,7 @@ const needsValue = (action: ButtonActionKind) =>
 export function ButtonsPanel() {
   const { t } = useTranslation()
   const profile = useActiveProfile()
+  const device = useNagaStore((state) => state.device)
   const updateActive = useNagaStore((state) => state.updateActive)
 
   const updateButton = (next: ButtonBinding) =>
@@ -38,6 +39,7 @@ export function ButtonsPanel() {
   const sideButtons = profile.buttons.filter((button) => button.id.startsWith('side-'))
   const plateBadge =
     profile.sidePlate === 'twelve' ? 'MMO' : profile.sidePlate === 'seven' ? 'MOBA' : 'FPS'
+  const showF13Preset = device.model === 'naga-pro-wired' && profile.sidePlate === 'twelve'
 
   return (
     <div className="section buttons-section">
@@ -72,7 +74,7 @@ export function ButtonsPanel() {
             <h3>{t('buttons.sideTitle', { count: sideButtons.length })}</h3>
           </div>
           <div className="card-head-actions">
-            {profile.sidePlate === 'twelve' && (
+            {showF13Preset && (
               <button type="button" className="ghost-button compact" onClick={applyF13Preset}>
                 F13–F24 preset
               </button>
