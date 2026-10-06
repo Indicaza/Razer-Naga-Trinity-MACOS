@@ -1,7 +1,10 @@
+import { useState } from 'react'
 import { Languages, MousePointer2, Plus, Radar, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '../i18n'
 import { useActiveProfile, useNagaStore } from '../store/useNagaStore'
+
+const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 
 export function Sidebar() {
   const { t, i18n } = useTranslation()
@@ -11,6 +14,7 @@ export function Sidebar() {
   const selectProfile = useNagaStore((state) => state.selectProfile)
   const createProfile = useNagaStore((state) => state.createProfile)
   const rescan = useNagaStore((state) => state.rescan)
+  const [isScanning, setIsScanning] = useState(false)
 
   const activeStage = active.dpi.stages[active.dpi.activeStage - 1] ?? active.dpi.stages[0]
   const currentLang = (i18n.resolvedLanguage ?? i18n.language ?? 'de').slice(0, 2) as SupportedLanguage
@@ -18,6 +22,20 @@ export function Sidebar() {
   const switchLanguage = (code: SupportedLanguage) => {
     void i18n.changeLanguage(code)
     void window.naga?.updateSettings?.({ language: code })
+  }
+
+  const scanWithRetry = async () => {
+    if (isScanning) return
+    setIsScanning(true)
+    try {
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await rescan()
+        if (useNagaStore.getState().device.connected) return
+        if (attempt < 2) await wait(350)
+      }
+    } finally {
+      setIsScanning(false)
+    }
   }
 
   return (
@@ -51,9 +69,10 @@ export function Sidebar() {
         <button
           className="ghost-button compact full-width"
           type="button"
-          onClick={() => void rescan()}
+          onClick={() => void scanWithRetry()}
+          disabled={isScanning}
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={14} className={isScanning ? 'spin' : undefined} />
           {t('sidebar.rescan')}
         </button>
       </div>
