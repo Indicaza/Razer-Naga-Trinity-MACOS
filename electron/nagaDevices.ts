@@ -21,7 +21,7 @@ const NAGA_DEVICES: readonly NagaDeviceDefinition[] = [
     model: 'naga-pro-wired',
     productId: 0x008f,
     productName: 'Razer Naga Pro',
-    writeSupport: 'buttons-only',
+    writeSupport: 'full',
   },
 ]
 
