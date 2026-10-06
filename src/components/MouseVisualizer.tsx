@@ -108,7 +108,7 @@ export function MouseVisualizer({ profile, compact = false }: Props) {
           fill="rgba(255,255,255,0.06)"
         />
 
-        <g className="zone scroll-zone" style={{ filter: 'url(#scrollBlur)' }}>
+        <g className="zone scroll-zone">
           <rect x="118" y="118" width="24" height="46" rx="10" fill="#070907" />
           <rect
             x="120"
