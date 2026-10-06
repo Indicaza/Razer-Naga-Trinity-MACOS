@@ -11,11 +11,13 @@ import type {
   WaveDirection,
 } from '../../electron/types'
 
-const ZONE_IDS: readonly LedZone[] = ['logo', 'scroll', 'side']
+const ALL_ZONE_IDS: readonly LedZone[] = ['logo', 'scroll', 'side']
+const NAGA_PRO_ZONE_IDS: readonly LedZone[] = ['logo', 'scroll']
 
 export function LightingPanel() {
   const { t } = useTranslation()
   const profile = useActiveProfile()
+  const device = useNagaStore((state) => state.device)
   const updateRgb = useNagaStore((state) => state.updateRgb)
   const { rgb } = profile
 
@@ -32,7 +34,9 @@ export function LightingPanel() {
     }
   }, [rgb])
 
-  const usesSecondary = rgb.effect === 'breathing'
+  const isNagaPro = device.model === 'naga-pro-wired'
+  const zoneIds = isNagaPro ? NAGA_PRO_ZONE_IDS : ALL_ZONE_IDS
+  const usesSecondary = rgb.effect === 'breathing' && !isNagaPro
   const usesWaveDirection = rgb.effect === 'wave'
   const usesReactiveSpeed = rgb.effect === 'reactive'
   const supportsColor =
@@ -226,7 +230,7 @@ export function LightingPanel() {
         </header>
 
         <div className="zone-grid">
-          {ZONE_IDS.map((zoneId) => {
+          {zoneIds.map((zoneId) => {
             const zoneConfig = rgb.zones[zoneId]
             const zoneLabel = t(`zones.${zoneId}.label`)
             const zoneDescription = t(`zones.${zoneId}.description`)

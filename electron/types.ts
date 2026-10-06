@@ -92,6 +92,9 @@ export interface NagaProfile {
 
 export interface AppSettings {
   rgbOffOnLock: boolean
+  reverseMouseScroll?: boolean
+  autoApplyOnConnect?: boolean
+  autoLaunchConfigured?: boolean
   language?: 'de' | 'en'
 }
 
@@ -122,11 +125,8 @@ export interface DeviceInfo {
 
 export interface ApplyResult {
   ok: boolean
-  /** Fallback string in German – used when no key is set or the renderer can't translate. */
   message: string
-  /** i18next translation key (under `driverNotices.*`) the renderer should prefer over `message`. */
   key?: string
-  /** Optional interpolation params for the i18next key (e.g. `{ macroCount: 3 }`). */
   params?: Record<string, string | number>
   stage?: 'rgb' | 'dpi' | 'polling' | 'complete'
 }

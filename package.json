@@ -2,7 +2,7 @@
   "name": "naga-trinity-control",
   "private": true,
   "version": "0.1.0",
-  "description": "Electron controller for Razer Naga Trinity profiles, DPI and RGB.",
+  "description": "Electron controller for Razer Naga mice on macOS.",
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
@@ -46,7 +46,7 @@
   },
   "build": {
     "appId": "local.naga-trinity-control",
-    "productName": "Naga Trinity Control",
+    "productName": "Razer Naga Control",
     "files": [
       "dist",
       "dist-electron"

@@ -12,7 +12,12 @@ import {
 import { join } from 'node:path'
 import { applyHardwareProfile, applyRgbOnly, setRgbOff } from './nagaDriver'
 import { findSupportedNaga, toDeviceInfo } from './nagaDevices'
-import { applyNagaProButtons } from './nagaProDriver'
+import {
+  applyNagaProProfile,
+  applyNagaProRgbOnly,
+  applyNagaProScrollDirection,
+  setNagaProRgbOff,
+} from './nagaProDriver'
 import { registerProfileShortcuts, unregisterAllMacroShortcuts } from './macroEngine'
 import {
   deleteProfile,
@@ -39,7 +44,10 @@ const TRAY_ICON_DATA_URL =
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
 let isQuitting = false
+let deviceWatchTimer: NodeJS.Timeout | null = null
 let cachedRgbOffOnLock = true
+let cachedReverseMouseScroll = true
+let cachedAutoApplyOnConnect = true
 let cachedLang: 'de' | 'en' = 'de'
 
 const TRAY_STRINGS = {
@@ -47,6 +55,8 @@ const TRAY_STRINGS = {
     openWindow: 'Fenster öffnen',
     reapplyProfile: 'Profil neu anwenden',
     launchAtLogin: 'Bei macOS-Login starten',
+    reverseMouseScroll: 'Naga-Mausrad umkehren',
+    autoApplyOnConnect: 'Profil beim Anschließen anwenden',
     rgbOffOnLock: 'RGB beim Sperren ausschalten',
     quit: 'Beenden',
   },
@@ -54,6 +64,8 @@ const TRAY_STRINGS = {
     openWindow: 'Open window',
     reapplyProfile: 'Re-apply profile',
     launchAtLogin: 'Launch at macOS login',
+    reverseMouseScroll: 'Reverse Naga mouse wheel',
+    autoApplyOnConnect: 'Apply profile when Naga connects',
     rgbOffOnLock: 'Turn RGB off when screen locks',
     quit: 'Quit',
   },
@@ -70,27 +82,17 @@ const detectInitialLang = (stored: 'de' | 'en' | undefined): 'de' | 'en' => {
 const refreshSettingsCache = async () => {
   const store = await readStore()
   cachedRgbOffOnLock = store.settings?.rgbOffOnLock !== false
+  cachedReverseMouseScroll = store.settings?.reverseMouseScroll !== false
+  cachedAutoApplyOnConnect = store.settings?.autoApplyOnConnect !== false
   cachedLang = detectInitialLang(store.settings?.language)
 }
 
 const scanNaga = () => toDeviceInfo(findSupportedNaga())
 
-const fullWriteBlock = (): ApplyResult | null => {
-  const device = scanNaga()
-  if (!device.connected || device.writeSupport === 'full') return null
-  return {
-    ok: false,
-    message:
-      device.writeSupport === 'buttons-only'
-        ? `${device.productName ?? 'Razer Naga'} currently supports side-button writes only.`
-        : `${device.productName ?? 'Razer Naga'} detected, but hardware writes are disabled.`,
-  }
-}
-
 const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> => {
   const device = scanNaga()
   if (device.connected && device.model === 'naga-pro-wired') {
-    return applyNagaProButtons(profile)
+    return applyNagaProProfile(profile, cachedReverseMouseScroll)
   }
   if (device.connected && device.writeSupport !== 'full') {
     return {
@@ -101,11 +103,27 @@ const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> =>
   return applyHardwareProfile(profile)
 }
 
-const applyRgbSafely = async (rgb: RgbSettings): Promise<ApplyResult> =>
-  fullWriteBlock() ?? applyRgbOnly(rgb)
+const applyRgbSafely = async (rgb: RgbSettings): Promise<ApplyResult> => {
+  const device = scanNaga()
+  if (device.connected && device.model === 'naga-pro-wired') {
+    return applyNagaProRgbOnly(rgb)
+  }
+  if (device.connected && device.writeSupport !== 'full') {
+    return { ok: false, message: `${device.productName ?? 'Razer Naga'} RGB is not supported yet.` }
+  }
+  return applyRgbOnly(rgb)
+}
 
-const setRgbOffSafely = async (): Promise<ApplyResult> =>
-  fullWriteBlock() ?? setRgbOff()
+const setRgbOffSafely = async (): Promise<ApplyResult> => {
+  const device = scanNaga()
+  if (device.connected && device.model === 'naga-pro-wired') {
+    return setNagaProRgbOff()
+  }
+  if (device.connected && device.writeSupport !== 'full') {
+    return { ok: false, message: `${device.productName ?? 'Razer Naga'} RGB is not supported yet.` }
+  }
+  return setRgbOff()
+}
 
 const createWindow = async () => {
   if (mainWindow) {
@@ -165,6 +183,25 @@ const showWindow = async () => {
   }
 }
 
+const updateRuntimeSettings = async (partial: Partial<AppSettings>) => {
+  const next = await updateSettings(partial)
+  cachedRgbOffOnLock = next.settings?.rgbOffOnLock !== false
+  cachedReverseMouseScroll = next.settings?.reverseMouseScroll !== false
+  cachedAutoApplyOnConnect = next.settings?.autoApplyOnConnect !== false
+  cachedLang = detectInitialLang(next.settings?.language)
+  tray?.setContextMenu(buildTrayMenu())
+  return next.settings ?? { rgbOffOnLock: true }
+}
+
+const updateScrollDirection = async (enabled: boolean) => {
+  await updateRuntimeSettings({ reverseMouseScroll: enabled })
+  const device = scanNaga()
+  if (device.connected && device.model === 'naga-pro-wired') {
+    const result = await applyNagaProScrollDirection(enabled)
+    console.log('[naga] scroll direction:', result.ok ? 'OK' : 'FAIL', '-', result.message)
+  }
+}
+
 const buildTrayMenu = () => {
   const s = tx()
   return Menu.buildFromTemplate([
@@ -186,10 +223,23 @@ const buildTrayMenu = () => {
       type: 'checkbox',
       checked: app.getLoginItemSettings().openAtLogin,
       click: (item) => {
-        app.setLoginItemSettings({
-          openAtLogin: item.checked,
-          openAsHidden: true,
-        })
+        app.setLoginItemSettings({ openAtLogin: item.checked, openAsHidden: true })
+      },
+    },
+    {
+      label: s.autoApplyOnConnect,
+      type: 'checkbox',
+      checked: cachedAutoApplyOnConnect,
+      click: (item) => {
+        void updateRuntimeSettings({ autoApplyOnConnect: item.checked })
+      },
+    },
+    {
+      label: s.reverseMouseScroll,
+      type: 'checkbox',
+      checked: cachedReverseMouseScroll,
+      click: (item) => {
+        void updateScrollDirection(item.checked)
       },
     },
     {
@@ -197,10 +247,7 @@ const buildTrayMenu = () => {
       type: 'checkbox',
       checked: cachedRgbOffOnLock,
       click: (item) => {
-        cachedRgbOffOnLock = item.checked
-        void updateSettings({ rgbOffOnLock: item.checked }).then(() => {
-          tray?.setContextMenu(buildTrayMenu())
-        })
+        void updateRuntimeSettings({ rgbOffOnLock: item.checked })
       },
     },
     { type: 'separator' },
@@ -273,6 +320,26 @@ const registerPowerHandlers = () => {
   })
 }
 
+const registerDeviceWatcher = () => {
+  let wasConnected = scanNaga().connected
+  deviceWatchTimer = setInterval(() => {
+    const connected = scanNaga().connected
+    if (connected && !wasConnected && cachedAutoApplyOnConnect) {
+      console.log('[naga] mouse connected; applying saved profile')
+      setTimeout(() => void applyActiveProfile(), 650)
+    }
+    wasConnected = connected
+  }, 1500)
+}
+
+const configureFirstRunBackground = async () => {
+  if (isDev) return
+  const store = await readStore()
+  if (store.settings?.autoLaunchConfigured === true) return
+  app.setLoginItemSettings({ openAtLogin: true, openAsHidden: true })
+  await updateSettings({ autoLaunchConfigured: true })
+}
+
 ipcMain.handle('device:scan', () => scanNaga())
 ipcMain.handle('store:read', () => readStore())
 ipcMain.handle('store:write', async (_event, store: ProfileStore) => writeStore(store))
@@ -306,18 +373,16 @@ ipcMain.handle('app:get-settings', async () => {
   const store = await readStore()
   return store.settings ?? { rgbOffOnLock: true }
 })
-ipcMain.handle('app:update-settings', async (_event, partial: Partial<AppSettings>) => {
-  const next = await updateSettings(partial)
-  cachedRgbOffOnLock = next.settings?.rgbOffOnLock !== false
-  cachedLang = detectInitialLang(next.settings?.language)
-  tray?.setContextMenu(buildTrayMenu())
-  return next.settings ?? { rgbOffOnLock: true }
-})
+ipcMain.handle('app:update-settings', async (_event, partial: Partial<AppSettings>) =>
+  updateRuntimeSettings(partial),
+)
 
 app.whenReady().then(async () => {
   ensureAccessibilityPermission()
+  await configureFirstRunBackground()
   await refreshSettingsCache()
   registerPowerHandlers()
+  registerDeviceWatcher()
   createTray()
 
   const launchedHidden = app.getLoginItemSettings().wasOpenedAsHidden
@@ -342,5 +407,6 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   isQuitting = true
+  if (deviceWatchTimer) clearInterval(deviceWatchTimer)
   unregisterAllMacroShortcuts()
 })
