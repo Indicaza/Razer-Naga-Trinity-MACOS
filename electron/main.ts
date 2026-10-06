@@ -13,6 +13,7 @@ import { join } from 'node:path'
 import { applyHardwareProfile, applyRgbOnly, setRgbOff } from './nagaDriver'
 import { findSupportedNaga, toDeviceInfo } from './nagaDevices'
 import {
+  applyNagaProDpiOnly,
   applyNagaProProfile,
   applyNagaProRgbOnly,
   applyNagaProScrollDirection,
@@ -112,6 +113,17 @@ const applyRgbSafely = async (rgb: RgbSettings): Promise<ApplyResult> => {
     return { ok: false, message: `${device.productName ?? 'Razer Naga'} RGB is not supported yet.` }
   }
   return applyRgbOnly(rgb)
+}
+
+const previewDpiSafely = async (x: number, y: number): Promise<ApplyResult> => {
+  const device = scanNaga()
+  if (device.connected && device.model === 'naga-pro-wired') {
+    return applyNagaProDpiOnly(x, y)
+  }
+  return {
+    ok: false,
+    message: `${device.productName ?? 'Razer Naga'} live mouse-speed preview is not supported yet.`,
+  }
 }
 
 const setRgbOffSafely = async (): Promise<ApplyResult> => {
@@ -358,6 +370,7 @@ ipcMain.handle('profile:apply', async (_event, profile: NagaProfile) => {
   return result
 })
 ipcMain.handle('rgb:preview', async (_event, rgb: RgbSettings) => applyRgbSafely(rgb))
+ipcMain.handle('dpi:preview', async (_event, x: number, y: number) => previewDpiSafely(x, y))
 
 ipcMain.handle('app:get-login-item', () => app.getLoginItemSettings().openAtLogin)
 ipcMain.handle('app:set-login-item', (_event, enabled: boolean) => {
