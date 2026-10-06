@@ -92,8 +92,8 @@ export interface NagaProfile {
 
 export interface AppSettings {
   rgbOffOnLock: boolean
-  reverseMouseScroll: boolean
-  autoApplyOnConnect: boolean
+  reverseMouseScroll?: boolean
+  autoApplyOnConnect?: boolean
   autoLaunchConfigured?: boolean
   language?: 'de' | 'en'
 }
