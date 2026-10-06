@@ -19,6 +19,7 @@ import {
   applyNagaProScrollDirection,
   setNagaProRgbOff,
 } from './nagaProDriver'
+import { applyNagaProWheelTilt } from './nagaProTilt'
 import { registerProfileShortcuts, unregisterAllMacroShortcuts } from './macroEngine'
 import {
   deleteProfile,
@@ -93,7 +94,10 @@ const scanNaga = () => toDeviceInfo(findSupportedNaga())
 const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> => {
   const device = scanNaga()
   if (device.connected && device.model === 'naga-pro-wired') {
-    return applyNagaProProfile(profile, cachedReverseMouseScroll)
+    const profileResult = await applyNagaProProfile(profile, cachedReverseMouseScroll)
+    if (!profileResult.ok) return profileResult
+    const tiltResult = await applyNagaProWheelTilt(profile)
+    return tiltResult.ok ? profileResult : tiltResult
   }
   if (device.connected && device.writeSupport !== 'full') {
     return {
