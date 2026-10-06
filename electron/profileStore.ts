@@ -15,6 +15,7 @@ const STORE_VERSION = 3
 
 const defaultSettings = (): AppSettings => ({
   rgbOffOnLock: true,
+  browserAutoscroll: true,
 })
 
 const mergeSettings = (incoming: Partial<AppSettings> | undefined): AppSettings => ({
