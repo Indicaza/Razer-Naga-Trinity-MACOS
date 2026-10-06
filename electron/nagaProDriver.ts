@@ -18,6 +18,8 @@ const SIDE_BUTTON_BASE = 0x40
 const VARSTORE = 0x01
 const LED_SCROLL = 0x01
 const LED_LOGO = 0x04
+const WHEEL_UP_SLOT = 0x09
+const WHEEL_DOWN_SLOT = 0x0a
 
 const F13_TO_F24_HID: readonly number[] = [
   0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0x70, 0x71, 0x72, 0x73,
@@ -158,6 +160,23 @@ const writeDisabledBinding = async (device: Device, buttonIndex: number) => {
   report[11] = 0x00
   report[12] = 0x00
   await controlSetReport(device, report)
+}
+
+const writeMouseBinding = async (device: Device, sourceSlot: number, targetButton: number) => {
+  const report = createReport(0x02, 0x0c, 0x0a)
+  report[8] = DIRECT_PROFILE
+  report[9] = sourceSlot
+  report[10] = 0x00
+  report[11] = 0x01
+  report[12] = 0x01
+  report[13] = targetButton
+  await controlSetReport(device, report)
+}
+
+const applyScrollDirection = async (device: Device, reversed: boolean) => {
+  await writeMouseBinding(device, WHEEL_UP_SLOT, reversed ? WHEEL_DOWN_SLOT : WHEEL_UP_SLOT)
+  await wait(12)
+  await writeMouseBinding(device, WHEEL_DOWN_SLOT, reversed ? WHEEL_UP_SLOT : WHEEL_DOWN_SLOT)
 }
 
 const resolveBinding = (
@@ -320,13 +339,18 @@ const resultFromError = (error: unknown): ApplyResult => ({
   message: error instanceof Error ? error.message : 'Unknown Naga Pro USB error.',
 })
 
-export const applyNagaProProfile = async (profile: NagaProfile): Promise<ApplyResult> => {
+export const applyNagaProProfile = async (
+  profile: NagaProfile,
+  reverseMouseScroll = false,
+): Promise<ApplyResult> => {
   try {
     await withNagaPro(async (device) => {
       await applyRgb(device, profile.rgb)
       await applyDpi(device, profile)
       await wait(12)
       await applyPolling(device, profile.pollingRate)
+      await wait(12)
+      await applyScrollDirection(device, reverseMouseScroll)
       await wait(12)
       await applyButtons(device, profile)
     })
@@ -346,6 +370,19 @@ export const applyNagaProButtons = async (profile: NagaProfile): Promise<ApplyRe
     return {
       ok: true,
       message: 'Naga Pro 12-button plate bindings applied to the volatile profile.',
+      stage: 'complete',
+    }
+  } catch (error) {
+    return resultFromError(error)
+  }
+}
+
+export const applyNagaProScrollDirection = async (reversed: boolean): Promise<ApplyResult> => {
+  try {
+    await withNagaPro((device) => applyScrollDirection(device, reversed))
+    return {
+      ok: true,
+      message: reversed ? 'Naga Pro wheel reversed.' : 'Naga Pro wheel restored to standard direction.',
       stage: 'complete',
     }
   } catch (error) {
