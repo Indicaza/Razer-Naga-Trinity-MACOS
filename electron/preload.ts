@@ -25,6 +25,8 @@ const api = {
     ipcRenderer.invoke('profile:apply', profile) as Promise<ApplyResult>,
   previewRgb: (rgb: RgbSettings) =>
     ipcRenderer.invoke('rgb:preview', rgb) as Promise<ApplyResult>,
+  previewDpi: (x: number, y = x) =>
+    ipcRenderer.invoke('dpi:preview', x, y) as Promise<ApplyResult>,
   getLoginItem: () => ipcRenderer.invoke('app:get-login-item') as Promise<boolean>,
   setLoginItem: (enabled: boolean) =>
     ipcRenderer.invoke('app:set-login-item', enabled) as Promise<boolean>,
