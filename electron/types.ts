@@ -103,7 +103,7 @@ export interface ProfileStore {
 }
 
 export type NagaModel = 'naga-trinity' | 'naga-pro-wired'
-export type WriteSupport = 'full' | 'detect-only'
+export type WriteSupport = 'full' | 'buttons-only' | 'detect-only'
 
 export interface DeviceInfo {
   connected: boolean
