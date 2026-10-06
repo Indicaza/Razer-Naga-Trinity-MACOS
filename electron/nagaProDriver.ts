@@ -289,15 +289,15 @@ const applyDpi = async (device: Device, profile: NagaProfile) => {
   if (stages.length === 0) return
 
   const report = createReport(0x04, 0x06, 0x26)
-  report[8] = 0x00
-  report[9] = Math.max(1, Math.min(stages.length, profile.dpi.activeStage))
+  report[8] = VARSTORE
+  report[9] = Math.max(0, Math.min(stages.length - 1, profile.dpi.activeStage - 1))
   report[10] = stages.length
 
   stages.forEach((stage, index) => {
     const x = Math.max(100, Math.min(20000, Math.round(stage.x)))
     const y = Math.max(100, Math.min(20000, Math.round(stage.y)))
     const base = 11 + index * 7
-    report[base] = index + 1
+    report[base] = index
     report[base + 1] = (x >> 8) & 0xff
     report[base + 2] = x & 0xff
     report[base + 3] = (y >> 8) & 0xff
