@@ -253,7 +253,7 @@ private func autoscrollEventCallback(
 
 let app = NSApplication.shared
 app.setActivationPolicy(.prohibited)
-let controller = AutoscrollController()
+private let controller = AutoscrollController()
 if !controller.start() {
   exit(2)
 }
