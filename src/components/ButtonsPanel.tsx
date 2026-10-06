@@ -17,6 +17,23 @@ export function ButtonsPanel() {
       buttons: current.buttons.map((button) => (button.id === next.id ? next : button)),
     }))
 
+  const applyF13Preset = () =>
+    updateActive((current) => ({
+      ...current,
+      buttons: current.buttons.map((button) => {
+        const match = /^side-(\d+)$/.exec(button.id)
+        if (!match) return button
+        const index = Number(match[1])
+        if (index < 1 || index > 12) return button
+        return {
+          ...button,
+          action: 'key',
+          value: `F${12 + index}`,
+          macroId: undefined,
+        }
+      }),
+    }))
+
   const baseButtons = profile.buttons.filter((button) => button.id.startsWith('base-'))
   const sideButtons = profile.buttons.filter((button) => button.id.startsWith('side-'))
   const plateBadge =
@@ -54,7 +71,14 @@ export function ButtonsPanel() {
             </p>
             <h3>{t('buttons.sideTitle', { count: sideButtons.length })}</h3>
           </div>
-          <span className="badge muted">{plateBadge}</span>
+          <div className="card-head-actions">
+            {profile.sidePlate === 'twelve' && (
+              <button type="button" className="ghost-button compact" onClick={applyF13Preset}>
+                F13–F24 preset
+              </button>
+            )}
+            <span className="badge muted">{plateBadge}</span>
+          </div>
         </header>
         <div className="button-grid">
           {sideButtons.map((button) => (
@@ -80,7 +104,6 @@ interface BindingRowProps {
 function BindingRow({ binding, macros, onChange }: BindingRowProps) {
   const { t, i18n } = useTranslation()
   const showInput = needsValue(binding.action)
-  // Base-Button-Labels über i18n auflösen; gespeicherter Label dient als Fallback (z.B. für custom Side-Button-Namen).
   const labelKey = `buttons.labels.${binding.id}`
   const displayLabel = i18n.exists(labelKey) ? (t(labelKey) as string) : binding.label
 
