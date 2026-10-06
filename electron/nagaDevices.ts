@@ -21,7 +21,7 @@ const NAGA_DEVICES: readonly NagaDeviceDefinition[] = [
     model: 'naga-pro-wired',
     productId: 0x008f,
     productName: 'Razer Naga Pro',
-    writeSupport: 'detect-only',
+    writeSupport: 'buttons-only',
   },
 ]
 
@@ -64,7 +64,7 @@ export const requireWritableNaga = (): DetectedNagaDevice => {
 
   if (detected.definition.writeSupport !== 'full') {
     throw new Error(
-      `${detected.definition.productName} detected, but hardware writes are disabled until its USB protocol is verified.`,
+      `${detected.definition.productName} detected, but full hardware writes are not enabled for this model.`,
     )
   }
 

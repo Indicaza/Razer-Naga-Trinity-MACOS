@@ -70,6 +70,13 @@ export function Sidebar() {
             <span className="dot-sep">·</span>
             {device.interfaces || 0} {t('sidebar.hidInterfaces')}
           </p>
+          {device.connected && device.writeSupport === 'buttons-only' && (
+            <p>
+              <strong>MMO buttons ready</strong>
+              <span className="dot-sep">·</span>
+              12-button plate writes enabled
+            </p>
+          )}
           {device.connected && device.writeSupport === 'detect-only' && (
             <p>
               <strong>Detected safely</strong>

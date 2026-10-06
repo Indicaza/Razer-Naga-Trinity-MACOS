@@ -12,6 +12,7 @@ import {
 import { join } from 'node:path'
 import { applyHardwareProfile, applyRgbOnly, setRgbOff } from './nagaDriver'
 import { findSupportedNaga, toDeviceInfo } from './nagaDevices'
+import { applyNagaProButtons } from './nagaProDriver'
 import { registerProfileShortcuts, unregisterAllMacroShortcuts } from './macroEngine'
 import {
   deleteProfile,
@@ -74,23 +75,37 @@ const refreshSettingsCache = async () => {
 
 const scanNaga = () => toDeviceInfo(findSupportedNaga())
 
-const getWriteBlock = (): ApplyResult | null => {
+const fullWriteBlock = (): ApplyResult | null => {
   const device = scanNaga()
   if (!device.connected || device.writeSupport === 'full') return null
   return {
     ok: false,
-    message: `${device.productName ?? 'Razer Naga'} detected, but hardware writes are disabled until its USB protocol is verified.`,
+    message:
+      device.writeSupport === 'buttons-only'
+        ? `${device.productName ?? 'Razer Naga'} currently supports side-button writes only.`
+        : `${device.productName ?? 'Razer Naga'} detected, but hardware writes are disabled.`,
   }
 }
 
-const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> =>
-  getWriteBlock() ?? applyHardwareProfile(profile)
+const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> => {
+  const device = scanNaga()
+  if (device.connected && device.model === 'naga-pro-wired') {
+    return applyNagaProButtons(profile)
+  }
+  if (device.connected && device.writeSupport !== 'full') {
+    return {
+      ok: false,
+      message: `${device.productName ?? 'Razer Naga'} does not support profile writes yet.`,
+    }
+  }
+  return applyHardwareProfile(profile)
+}
 
 const applyRgbSafely = async (rgb: RgbSettings): Promise<ApplyResult> =>
-  getWriteBlock() ?? applyRgbOnly(rgb)
+  fullWriteBlock() ?? applyRgbOnly(rgb)
 
 const setRgbOffSafely = async (): Promise<ApplyResult> =>
-  getWriteBlock() ?? setRgbOff()
+  fullWriteBlock() ?? setRgbOff()
 
 const createWindow = async () => {
   if (mainWindow) {
@@ -221,6 +236,7 @@ const applyActiveProfile = async () => {
   if (!active) return
   const hwResult = await applyProfileSafely(active)
   console.log('[naga] applyHardwareProfile:', hwResult.ok ? 'OK' : 'FAIL', '-', hwResult.message)
+  if (!hwResult.ok) return
   const reg = registerProfileShortcuts(active)
   console.log('[naga] macroShortcuts:', reg)
 }
