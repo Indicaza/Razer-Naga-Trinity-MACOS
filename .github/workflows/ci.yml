@@ -27,3 +27,12 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  macos-helper:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compile browser autoscroll helper
+        run: xcrun swiftc -O electron/native/AutoscrollHelper.swift -o /tmp/autoscroll-helper
