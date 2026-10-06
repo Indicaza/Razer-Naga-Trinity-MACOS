@@ -10,7 +10,8 @@ import {
   Tray,
 } from 'electron'
 import { join } from 'node:path'
-import { applyHardwareProfile, applyRgbOnly, listNagaDevices, setRgbOff } from './nagaDriver'
+import { applyHardwareProfile, applyRgbOnly, setRgbOff } from './nagaDriver'
+import { findSupportedNaga, toDeviceInfo } from './nagaDevices'
 import { registerProfileShortcuts, unregisterAllMacroShortcuts } from './macroEngine'
 import {
   deleteProfile,
@@ -21,7 +22,13 @@ import {
   upsertProfile,
   writeStore,
 } from './profileStore'
-import type { AppSettings, NagaProfile, ProfileStore, RgbSettings } from './types'
+import type {
+  AppSettings,
+  ApplyResult,
+  NagaProfile,
+  ProfileStore,
+  RgbSettings,
+} from './types'
 
 const isDev = Boolean(process.env.VITE_DEV_SERVER_URL)
 
@@ -65,6 +72,26 @@ const refreshSettingsCache = async () => {
   cachedLang = detectInitialLang(store.settings?.language)
 }
 
+const scanNaga = () => toDeviceInfo(findSupportedNaga())
+
+const getWriteBlock = (): ApplyResult | null => {
+  const device = scanNaga()
+  if (!device.connected || device.writeSupport === 'full') return null
+  return {
+    ok: false,
+    message: `${device.productName ?? 'Razer Naga'} detected, but hardware writes are disabled until its USB protocol is verified.`,
+  }
+}
+
+const applyProfileSafely = async (profile: NagaProfile): Promise<ApplyResult> =>
+  getWriteBlock() ?? applyHardwareProfile(profile)
+
+const applyRgbSafely = async (rgb: RgbSettings): Promise<ApplyResult> =>
+  getWriteBlock() ?? applyRgbOnly(rgb)
+
+const setRgbOffSafely = async (): Promise<ApplyResult> =>
+  getWriteBlock() ?? setRgbOff()
+
 const createWindow = async () => {
   if (mainWindow) {
     mainWindow.show()
@@ -76,7 +103,7 @@ const createWindow = async () => {
     height: 860,
     minWidth: 1080,
     minHeight: 720,
-    title: 'Naga Trinity Control',
+    title: 'Razer Naga Control',
     backgroundColor: '#0a0c0a',
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
@@ -173,9 +200,7 @@ const buildTrayMenu = () => {
 }
 
 const ensureAccessibilityPermission = () => {
-  // macOS: ohne diese Permission feuern weder globalShortcut-Callbacks noch osascript-Tippeingaben.
   if (process.platform !== 'darwin') return
-  // Mit prompt=true zeigt macOS automatisch den Dialog mit Link zu den Systemeinstellungen, falls noch nicht erteilt.
   systemPreferences.isTrustedAccessibilityClient(true)
 }
 
@@ -183,7 +208,7 @@ const createTray = () => {
   const icon = nativeImage.createFromDataURL(TRAY_ICON_DATA_URL)
   icon.setTemplateImage(true)
   tray = new Tray(icon)
-  tray.setToolTip('Naga Trinity Control')
+  tray.setToolTip('Razer Naga Control')
   tray.setContextMenu(buildTrayMenu())
   tray.on('click', () => {
     void showWindow()
@@ -194,7 +219,7 @@ const applyActiveProfile = async () => {
   const store = await readStore()
   const active = store.profiles.find((p) => p.id === store.activeProfileId)
   if (!active) return
-  const hwResult = await applyHardwareProfile(active)
+  const hwResult = await applyProfileSafely(active)
   console.log('[naga] applyHardwareProfile:', hwResult.ok ? 'OK' : 'FAIL', '-', hwResult.message)
   const reg = registerProfileShortcuts(active)
   console.log('[naga] macroShortcuts:', reg)
@@ -204,9 +229,8 @@ const restoreActiveProfileRgb = async () => {
   const store = await readStore()
   const active = store.profiles.find((p) => p.id === store.activeProfileId)
   if (!active) return
-  // Kurz warten, damit USB nach Wake bzw. Unlock wirklich verfügbar ist.
   await new Promise((resolve) => setTimeout(resolve, 600))
-  void applyRgbOnly(active.rgb)
+  void applyRgbSafely(active.rgb)
 }
 
 const shouldDimOnLock = async () => {
@@ -217,7 +241,7 @@ const shouldDimOnLock = async () => {
 const registerPowerHandlers = () => {
   powerMonitor.on('lock-screen', () => {
     void shouldDimOnLock().then((dim) => {
-      if (dim) void setRgbOff()
+      if (dim) void setRgbOffSafely()
     })
   })
   powerMonitor.on('unlock-screen', () => {
@@ -225,7 +249,7 @@ const registerPowerHandlers = () => {
   })
   powerMonitor.on('suspend', () => {
     void shouldDimOnLock().then((dim) => {
-      if (dim) void setRgbOff()
+      if (dim) void setRgbOffSafely()
     })
   })
   powerMonitor.on('resume', () => {
@@ -233,7 +257,7 @@ const registerPowerHandlers = () => {
   })
 }
 
-ipcMain.handle('device:scan', () => listNagaDevices())
+ipcMain.handle('device:scan', () => scanNaga())
 ipcMain.handle('store:read', () => readStore())
 ipcMain.handle('store:write', async (_event, store: ProfileStore) => writeStore(store))
 ipcMain.handle('profile:upsert', async (_event, profile: NagaProfile) => upsertProfile(profile))
@@ -241,7 +265,7 @@ ipcMain.handle('profile:delete', async (_event, id: string) => deleteProfile(id)
 ipcMain.handle('profile:duplicate', async (_event, id: string) => duplicateProfile(id))
 ipcMain.handle('profile:set-active', async (_event, id: string) => setActiveProfile(id))
 ipcMain.handle('profile:apply', async (_event, profile: NagaProfile) => {
-  const result = await applyHardwareProfile(profile)
+  const result = await applyProfileSafely(profile)
   if (result.ok) {
     await upsertProfile(profile)
     await setActiveProfile(profile.id)
@@ -250,7 +274,7 @@ ipcMain.handle('profile:apply', async (_event, profile: NagaProfile) => {
   }
   return result
 })
-ipcMain.handle('rgb:preview', async (_event, rgb: RgbSettings) => applyRgbOnly(rgb))
+ipcMain.handle('rgb:preview', async (_event, rgb: RgbSettings) => applyRgbSafely(rgb))
 
 ipcMain.handle('app:get-login-item', () => app.getLoginItemSettings().openAtLogin)
 ipcMain.handle('app:set-login-item', (_event, enabled: boolean) => {
@@ -280,7 +304,6 @@ app.whenReady().then(async () => {
   registerPowerHandlers()
   createTray()
 
-  // Beim Auto-Login mit openAsHidden startet die App ohne sichtbares Fenster – nur Tray.
   const launchedHidden = app.getLoginItemSettings().wasOpenedAsHidden
   if (!launchedHidden) {
     await createWindow()
@@ -288,12 +311,10 @@ app.whenReady().then(async () => {
     app.dock?.hide()
   }
 
-  // RGB nach Start automatisch wiederherstellen (daemon-Pattern).
   void applyActiveProfile()
 })
 
 app.on('window-all-closed', () => {
-  // macOS: App bleibt im Tray laufen, kein quit.
   if (process.platform !== 'darwin') {
     app.quit()
   }
