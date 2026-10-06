@@ -10,6 +10,7 @@ import {
   Tray,
 } from 'electron'
 import { join } from 'node:path'
+import { startBrowserAutoscroll, stopBrowserAutoscroll } from './browserAutoscroll'
 import { applyHardwareProfile, applyRgbOnly, setRgbOff } from './nagaDriver'
 import { findSupportedNaga, toDeviceInfo } from './nagaDevices'
 import {
@@ -50,6 +51,7 @@ let deviceWatchTimer: NodeJS.Timeout | null = null
 let cachedRgbOffOnLock = true
 let cachedReverseMouseScroll = true
 let cachedAutoApplyOnConnect = true
+let cachedBrowserAutoscroll = true
 let cachedLang: 'de' | 'en' = 'de'
 
 const TRAY_STRINGS = {
@@ -59,6 +61,7 @@ const TRAY_STRINGS = {
     launchAtLogin: 'Bei macOS-Login starten',
     reverseMouseScroll: 'Naga-Mausrad umkehren',
     autoApplyOnConnect: 'Profil beim Anschließen anwenden',
+    browserAutoscroll: 'Browser-Autoscroll per Mittelklick',
     rgbOffOnLock: 'RGB beim Sperren ausschalten',
     quit: 'Beenden',
   },
@@ -68,6 +71,7 @@ const TRAY_STRINGS = {
     launchAtLogin: 'Launch at macOS login',
     reverseMouseScroll: 'Reverse Naga mouse wheel',
     autoApplyOnConnect: 'Apply profile when Naga connects',
+    browserAutoscroll: 'Middle-click browser autoscroll',
     rgbOffOnLock: 'Turn RGB off when screen locks',
     quit: 'Quit',
   },
@@ -86,6 +90,7 @@ const refreshSettingsCache = async () => {
   cachedRgbOffOnLock = store.settings?.rgbOffOnLock !== false
   cachedReverseMouseScroll = store.settings?.reverseMouseScroll !== false
   cachedAutoApplyOnConnect = store.settings?.autoApplyOnConnect !== false
+  cachedBrowserAutoscroll = store.settings?.browserAutoscroll !== false
   cachedLang = detectInitialLang(store.settings?.language)
 }
 
@@ -200,11 +205,19 @@ const showWindow = async () => {
 }
 
 const updateRuntimeSettings = async (partial: Partial<AppSettings>) => {
+  const previousBrowserAutoscroll = cachedBrowserAutoscroll
   const next = await updateSettings(partial)
   cachedRgbOffOnLock = next.settings?.rgbOffOnLock !== false
   cachedReverseMouseScroll = next.settings?.reverseMouseScroll !== false
   cachedAutoApplyOnConnect = next.settings?.autoApplyOnConnect !== false
+  cachedBrowserAutoscroll = next.settings?.browserAutoscroll !== false
   cachedLang = detectInitialLang(next.settings?.language)
+
+  if (cachedBrowserAutoscroll !== previousBrowserAutoscroll) {
+    if (cachedBrowserAutoscroll) startBrowserAutoscroll()
+    else stopBrowserAutoscroll()
+  }
+
   tray?.setContextMenu(buildTrayMenu())
   return next.settings ?? { rgbOffOnLock: true }
 }
@@ -256,6 +269,14 @@ const buildTrayMenu = () => {
       checked: cachedReverseMouseScroll,
       click: (item) => {
         void updateScrollDirection(item.checked)
+      },
+    },
+    {
+      label: s.browserAutoscroll,
+      type: 'checkbox',
+      checked: cachedBrowserAutoscroll,
+      click: (item) => {
+        void updateRuntimeSettings({ browserAutoscroll: item.checked })
       },
     },
     {
@@ -398,6 +419,7 @@ app.whenReady().then(async () => {
   ensureAccessibilityPermission()
   await configureFirstRunBackground()
   await refreshSettingsCache()
+  if (cachedBrowserAutoscroll) startBrowserAutoscroll()
   registerPowerHandlers()
   registerDeviceWatcher()
   createTray()
@@ -425,5 +447,6 @@ app.on('activate', () => {
 app.on('before-quit', () => {
   isQuitting = true
   if (deviceWatchTimer) clearInterval(deviceWatchTimer)
+  stopBrowserAutoscroll()
   unregisterAllMacroShortcuts()
 })
