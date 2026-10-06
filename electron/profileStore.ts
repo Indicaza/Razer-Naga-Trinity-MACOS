@@ -11,7 +11,7 @@ import type {
   SidePlate,
 } from './types'
 
-const STORE_VERSION = 2
+const STORE_VERSION = 3
 
 const defaultSettings = (): AppSettings => ({
   rgbOffOnLock: true,
@@ -34,8 +34,8 @@ const BASE_BUTTONS: Array<{ label: string; action: ButtonBinding['action']; valu
   { label: 'Scroll Click', action: 'default', value: 'Mouse 3' },
   { label: 'Scroll Up', action: 'default', value: 'Wheel ↑' },
   { label: 'Scroll Down', action: 'default', value: 'Wheel ↓' },
-  { label: 'Wheel Tilt Left', action: 'default', value: 'Browser ←' },
-  { label: 'Wheel Tilt Right', action: 'default', value: 'Browser →' },
+  { label: 'Wheel Tilt Left', action: 'key', value: 'Ctrl+Left' },
+  { label: 'Wheel Tilt Right', action: 'key', value: 'Ctrl+Right' },
   { label: 'DPI Up', action: 'dpi-up', value: 'DPI +' },
   { label: 'DPI Down', action: 'dpi-down', value: 'DPI -' },
 ]
@@ -98,7 +98,6 @@ const defaultDpi = (): NagaProfile['dpi'] => ({
   ],
 })
 
-// Migriert Button-Listen aus älteren Profil-Versionen (vor Wheel-Tilt) auf das aktuelle 9-Base-Layout, ohne Side-Buttons-Anpassungen zu verlieren.
 const migrateButtons = (
   buttons: ButtonBinding[] | undefined,
   plate: SidePlate,
@@ -106,7 +105,6 @@ const migrateButtons = (
   const expected = buildButtonsForPlate(plate)
   if (!buttons) return expected
 
-  // Alt-Layout (vor Wheel-Tilt) hatte DPI Up/Down auf base-6/base-7. Wenn das so ist, Base-Buttons komplett neu setzen und nur Side-Customizings übernehmen.
   const legacyBase6 = buttons.find((b) => b.id === 'base-6')
   const isLegacyLayout = legacyBase6?.action === 'dpi-up'
 
@@ -120,7 +118,19 @@ const migrateButtons = (
   }
 
   const byId = new Map(buttons.map((b) => [b.id, b]))
-  return expected.map((entry) => byId.get(entry.id) ?? entry)
+  return expected.map((entry) => {
+    const existing = byId.get(entry.id)
+    const oldUntouchedTilt =
+      (entry.id === 'base-6' &&
+        existing?.action === 'default' &&
+        existing.value === 'Browser ←') ||
+      (entry.id === 'base-7' &&
+        existing?.action === 'default' &&
+        existing.value === 'Browser →')
+
+    if (oldUntouchedTilt) return entry
+    return existing ?? entry
+  })
 }
 
 export const createDefaultProfile = (
