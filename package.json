@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "npm run build:electron && concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && env -u ELECTRON_RUN_AS_NODE VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build": "tsc -b && vite build && npm run build:electron",
-    "build:electron": "rm -rf dist-electron && mkdir -p dist-electron && esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --external:usb --outfile=dist-electron/main.cjs && esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs",
+    "build:electron": "rm -rf dist-electron && mkdir -p dist-electron && esbuild electron/main.ts --bundle --platform=node --format=cjs --external:electron --external:usb --outfile=dist-electron/main.cjs && esbuild electron/preload.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-electron/preload.cjs && if [ \"$(uname -s)\" = \"Darwin\" ]; then xcrun swiftc -O electron/native/AutoscrollHelper.swift -o dist-electron/autoscroll-helper; fi",
     "lint": "eslint .",
     "preview": "vite preview",
     "electron:pack": "npm run build && electron-builder --dir"
@@ -50,6 +50,9 @@
     "files": [
       "dist",
       "dist-electron"
+    ],
+    "asarUnpack": [
+      "dist-electron/autoscroll-helper"
     ],
     "mac": {
       "category": "public.app-category.utilities"
